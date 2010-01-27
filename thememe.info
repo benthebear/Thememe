@@ -1,0 +1,6 @@
+; $Id:  $
+name = Thememe
+description = A Module to Drupal Themeing easier
+package = Other
+version = VERSION
+core = 6.x

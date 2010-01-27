@@ -1,0 +1,278 @@
+<?php
+
+/** Author: Benjamin Birkenhake <benjamin@birkenhake.org> 
+
+	This Module tries to mak Drupal Themeing suck less by doing three kinds of things:
+ 
+	1. 	Deliver additional Data to the rendering engine and the templates, 
+    	which allows Themers to create their HTML in the templates.
+    	These data maybe added to existing Variables, like the Node-Object,
+    	or they maybe delivered as singel Variables.
+ 
+ 	2. 	To provide functions, which deliver additional Data, 
+    	which allows Themers to create their HTML in the templates.
+ 
+ 	3. 	Get rid of some themingnonsens, like system.css.
+
+
+	Structure of this file:
+	
+	§1. Building parts of the $thememe Variable
+	§2. Helper-Funcions
+	§3. Template-Tags
+	§4. Hooks
+	Tip: You can jump to the parts by searching for $x 
+
+  	How to use this Module.
+  	There are several ways to use this module.
+
+	1. 	The $thememe Variable
+		This module adds several Information, which are usually not accessible 
+		from within a certain template into an variable named $thememe.
+		Currently you have to make it available in you template by using
+		global $thememe;
+		But I am going to push it via the preprocessing function into the templates, hopefully.
+		If you want to know whats inside $thememe use this line:
+		print "<pre>"; print_r($thememe); print "</pre>";
+		or, if you have the devel module up and running
+		krumo($thememe); 
+	
+	2. The Functions
+		As Drupal is not objectoriented, all functions of all modules are available at
+		almost any line of code. You are highly encouraged by me to use all functions
+		of §3. Template tags. They all start with thememe_tt_ so a clever IDE makes it
+		easier to choose them. 
+
+
+ @history
+ 20091018[ben_]: Created the file and moved some functions from my themes over here. 
+ 20091019[ben_]: Added preprocess hook and made all preprocessed variables in $thememe available
+
+
+
+ The complicated beauty of a river run dry!
+
+*/
+
+
+
+
+// §1. At first we set up the thememe array with LOTS of usefull information for Themeing Jedis
+
+
+function thememe_init(){
+	global $thememe;
+
+	$thememe = array();
+	// Put the path within $thememe
+	$thememe["q"] = $_GET["q"];
+	
+	// Put the Tabs (local tasks) within $thememe
+	if ($primary = menu_local_tasks(0)) {
+		$thememe["local-tasks"]["primary"] = thememe_links2array($primary);
+	}
+	if ($secondary = menu_local_tasks(1)) {
+		$thememe["local-tasks"]["secondary"] = thememe_links2array($secondary);
+	}
+	
+	// Are we on a Single-Node-Site or not?
+	if(arg(0)=="node" and is_numeric(arg(1)) and arg(2)==""){
+		$thememe["page"] = true;
+	}else{
+		$thememe["page"] = false;
+	}
+	
+	// get the page type
+	$thememe["page-type"] = thememe_tt_get_pagetype();
+	
+
+
+}
+
+
+
+
+
+
+// §2. Then we got some helper functions for themers
+
+/*
+* Reverse Engeneering of an HTML-String containing a list of Links
+*/
+function thememe_links2array($string){
+	// First: strip all but the links
+	$string = strip_tags($string, "<a>");
+
+	// Wrap a Root-Element around the links
+	$string = "<root>".$string."</root>";
+
+	// Load it as XML
+	$xml = simplexml_load_string($string);
+	$links = array();
+	
+	foreach($xml->a as $link_obj){
+		$link_arr = array();
+		$link_arr["href"] = "".$link_obj["href"];
+		if("".$link_obj["class"] !=""){$link_arr["class"] = "".$link_obj["class"];}
+		$link_arr["text"] = "".$link_obj;
+		$links[] = $link_arr;
+	}	
+	return $links;	
+}
+
+
+
+
+
+// §3. Template Tags
+
+/**
+* This function helps to determine, wether we are in a Node-Creation/Edit-Form
+*/
+function thememe_tt_is_nodecreationform(){
+	if((arg(0)=='node' and arg(1)=='add') or (arg(0)=='node' and arg(2)=='edit')){
+		return true;
+	}else{
+		return false;
+	}
+}
+
+
+
+/**
+* To determine on what Type of Page the rendering is.
+*/
+function thememe_tt_get_pagetype(){
+	// Homepage goes first
+	if(arg(0)=='node' and arg(1)==''){return "page-homepage";}
+	
+	// Node
+	if(arg(0)=='node' and arg(2)==''){return "page-node";}			
+	
+	// Node-Creation Form
+	if(thememe_tt_is_nodecreationform()){return "page-nodecreation";}
+	
+	// Single Term
+	if(arg(0)=='taxonomy' and arg(1)=='term' and arg(2)!='' and arg(3)==''){return "page-term";}
+	
+	// Archive
+	if(arg(0)=='archive'){return "page-archive";}
+	
+	// Backend
+	if(arg(0)=='admin'){return "page-admin";}	
+}
+
+
+
+/**
+* Create lots of CSS-Classes to be added to the Body-Element or another High-Level Element
+*
+* @see thememe_get_nodeclasses()
+*/
+function thememe_tt_get_pageclasses(){
+	// creating the classes for the body
+	
+	// 1. Get the Type of Page we are on.
+	$classes[] = thememe_tt_get_pagetype();
+	
+	// 2. Determine wether we are in the Backend
+	if(arg(0)=="admin"){$classes[]="admin";}
+	
+	// Determine wether we are in the Node-Creation-Form
+	if(thememe_tt_is_nodecreationform()){$classes[]='nodecreationform';}
+
+	// 3. Add Information on the number and Type of Sidebars
+	$sidebarcounter = 0;
+	if($left){
+		$classes[] = "sidebar-left";
+		$sidebarcounter ++;
+	}
+	if($right){
+		$classes[] = "sidebar-right";
+		$sidebarcounter ++;
+	}
+	$classes[] = "sidebars-".$sidebarcounter;
+	
+	// 4. Deliver the main Args
+	if(arg(0)!=""){$classes[] = "arg0-".arg(0);}
+	if(arg(1)!=""){$classes[] = "arg1-".arg(1);}
+	if(arg(2)!=""){$classes[] = "arg2-".arg(2);}
+	if(arg(0)!="" and arg(1)!=""){$classes[] = "arg01-".arg(0)."-".arg(1);}
+	
+	// Here we go!
+	return $classes;
+}
+
+
+/**
+* Create lots of CSS-Classes to be added to the main Element of Nodes
+*
+* @see thememe_get_pageclasses()
+*/
+function thememe_tt_get_nodeclasses($node, $page, $teaser){
+
+	// It's a node
+	$classes[] = "node";
+	
+	// It's a node of some Nodetype
+	$classes[] = $node->type;
+	
+	//Maybe it's sticky
+	if ($node->sticky=="1") {$classes[] = "sticky";} 
+	
+	// Maybe it's unpublished	
+	if ($node->status=="0") {$classes[] = "unpublished"; }
+	elseif ($node->status=="1") {$classes[] = "published";}
+	
+	// Maybe it's a full view or a teaser	
+	if ($page){$myview = "full";}
+	if ($teaser){$myview = "teaser";}
+	$classes[] = $myview;
+	
+	// Node-View-Combination
+	$classes[] = $node->type."-".$myview;
+	
+	// Maybe it has a teaserimage
+	if($node->field_teaserimage[0]["value"] != ''){$classes[] = "with-teaserimage";}
+	
+	// Get the age of the article counted in years
+	$datediff = date("Ymd")-date("Ymd", $node->created);
+	$age = substr($datediff, 0, strlen($datediff)-4);
+	if($age==""){$age = 0;}
+	$classes[] = "age-".$age;
+	
+	// Rockenroll!
+	return $classes;	
+}
+
+
+
+
+
+
+
+// $4. Now some Hooks to gather Data which could be usefull for Themers
+
+/*
+* Delivers the node related Links in as an array inside the global thememe variable
+*/
+
+function thememe_link_alter($links, $node){	
+	global $thememe;
+	$thememe["node"][$node->nid]["thelinks"][] = $links;	
+}
+
+/**
+* Adds all preprocessed Variables to the $thememe
+*/
+
+function thememe_preprocess(&$variables, $hook) {
+	global $thememe;	
+	$thememe["vars"][$hook] = $variables;
+	$thememe["feeds"] = drupal_add_feed();
+	$variables['feeds'] = $thememe["feeds"];
+}
+
+
+
+
