@@ -120,7 +120,19 @@ function thememe_links2array($string){
 	return $links;	
 }
 
-
+/*
+ * Remove all Quotes " ' from a given string, to make the string usable in xml-attributes.
+  *
+*/
+function thememe_cleanxml($string){
+	$string = ereg_replace("'", "", $string);
+	$string = ereg_replace('"', "", $string);
+	$string = ereg_replace('&amp;', "", $string);
+	$string = ereg_replace('&lt;', "", $string);
+	$string = ereg_replace('&gt;', "", $string);
+	$string = ereg_replace('&', "", $string);
+	return $string;
+}
 
 
 
